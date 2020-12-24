@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1030371189483",
+    "project_id": "chatmodulewithfirestore",
+    "storage_bucket": "chatmodulewithfirestore.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1030371189483:android:902ee65ac1a9620b67d4ae",
+        "android_client_info": {
+          "package_name": "com.uzair.chatmodulewithfirebase"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1030371189483-9poduuoivl5v2qn210g8m3tmbrnd661o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.uzair.chatmodulewithfirebase",
+            "certificate_hash": "e0293a34df4f433ae0f161143973071186026cb3"
+          }
+        },
+        {
+          "client_id": "1030371189483-gsv3i9unuldup6l526c4gt2u3sil5bbq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDzT_a1UZJk3q9ph-zJgNzZ_6dycUPWxDk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1030371189483-gsv3i9unuldup6l526c4gt2u3sil5bbq.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
