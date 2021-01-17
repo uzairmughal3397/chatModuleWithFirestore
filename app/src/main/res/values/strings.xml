@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Chat Module with firebase</string>
+    <string name="delete_warning">Do You Want to delete this chat</string>
 </resources>

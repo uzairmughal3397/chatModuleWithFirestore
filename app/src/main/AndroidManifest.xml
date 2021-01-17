@@ -11,7 +11,9 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ChatModuleWithFirebase">
-        <activity android:name=".activites.groupChat.GroupChatActivity"></activity>
+        <activity android:name=".activites.groupChat.GroupChatActivity">
+
+        </activity>
         <activity android:name=".activites.groupList.GroupListActivity" />
         <activity android:name=".activites.selectUser.SelectUserActivity">
             <intent-filter>

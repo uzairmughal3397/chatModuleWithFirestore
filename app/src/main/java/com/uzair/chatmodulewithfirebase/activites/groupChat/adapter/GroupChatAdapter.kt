@@ -5,13 +5,17 @@ import android.view.ViewGroup
 import androidx.databinding.DataBindingUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.uzair.chatmodulewithfirebase.R
+import com.uzair.chatmodulewithfirebase.activites.chat.callBacks.ChatSelectionCallBack
 import com.uzair.chatmodulewithfirebase.dataClasses.GroupChatDataClass
+import com.uzair.chatmodulewithfirebase.dataClasses.UserInfoClass
 import com.uzair.chatmodulewithfirebase.databinding.GroupChatRvLayoutLeftBinding
 import com.uzair.chatmodulewithfirebase.databinding.GroupChatRvLayoutRightBinding
 
 class GroupChatAdapter(
+    val userLists: ArrayList<UserInfoClass>,
     private val chatArrayList: ArrayList<GroupChatDataClass>,
-    private val currentUserId: String
+    private val currentUserId: String,
+    private val callBack: ChatSelectionCallBack
 ) :
     RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
@@ -22,17 +26,31 @@ class GroupChatAdapter(
     inner class ViewHolderLeft(private val itemBinding: GroupChatRvLayoutLeftBinding) :
         RecyclerView.ViewHolder(itemBinding.root) {
         fun bindData(chatMessageDataClass: GroupChatDataClass) {
-            itemBinding.tvMessage.text=chatMessageDataClass.message
-            itemBinding.tvTime.text=chatMessageDataClass.time
-            itemBinding.tvSenderName.text=chatMessageDataClass.senderName
+            itemBinding.tvMessage.text = chatMessageDataClass.message
+            itemBinding.tvTime.text = chatMessageDataClass.createdAt.toString()
+            itemBinding.tvSenderName.text = chatMessageDataClass.senderName
+            itemView.setOnLongClickListener {
+                callBack.onChatSelection(chatMessageDataClass)
+                true
+            }
         }
     }
 
     inner class ViewHolderRight(private val itemBinding: GroupChatRvLayoutRightBinding) :
         RecyclerView.ViewHolder(itemBinding.root) {
         fun bindData(chatMessageDataClass: GroupChatDataClass) {
-            itemBinding.tvMessage.text=chatMessageDataClass.message
-            itemBinding.tvTime.text=chatMessageDataClass.time
+            itemBinding.tvMessage.text = chatMessageDataClass.message
+            itemBinding.tvTime.text = chatMessageDataClass.createdAt.toString()
+
+            if (chatMessageDataClass.seenBy.size == userLists.size - 1)
+                itemBinding.tvStatus.text = "seen"
+            else
+                itemBinding.tvStatus.text = "sent"
+
+            itemBinding.right.setOnLongClickListener {
+                callBack.onChatSelection(chatMessageDataClass)
+                true
+            }
         }
     }
 

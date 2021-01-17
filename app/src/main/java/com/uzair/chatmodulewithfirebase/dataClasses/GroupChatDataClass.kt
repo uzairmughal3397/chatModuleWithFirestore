@@ -1,10 +1,14 @@
 package com.uzair.chatmodulewithfirebase.dataClasses
 
-class GroupChatDataClass() {
-    val groupId :String?=null
-    val message :String?=null
-    val senderName :String?=null
-    val senderId :String?=null
-    val time :String?=null
-    val timeInMilli :String?=null
+import java.util.*
+
+class GroupChatDataClass {
+//    var groupId :String?=null
+    var id :String?=null
+    var message :String?=null
+    var senderName :String?=null
+    var senderId :String?=null
+    var createdAt =Date()
+    var seenBy= arrayListOf<String>()
+    var deletedFor= arrayListOf<String>()
 }

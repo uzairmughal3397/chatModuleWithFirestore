@@ -1,7 +1,7 @@
 package com.uzair.chatmodulewithfirebase.activites.usersList
 
-import com.uzair.chatmodulewithfirebase.dataClasses.UserInfoDataClass
+import com.uzair.chatmodulewithfirebase.dataClasses.UserInfoClass
 
 interface UserListCallback {
-    fun onUserSelected(userInfo:UserInfoDataClass)
+    fun onUserSelected(userInfo: UserInfoClass)
 }

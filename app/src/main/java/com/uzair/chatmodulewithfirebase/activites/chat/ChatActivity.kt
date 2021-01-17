@@ -1,29 +1,34 @@
 package com.uzair.chatmodulewithfirebase.activites.chat
 
+import android.app.Dialog
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.widget.Toast
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.databinding.DataBindingUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.uzair.chatmodulewithfirebase.R
 import com.uzair.chatmodulewithfirebase.activites.BaseActivity
 import com.uzair.chatmodulewithfirebase.activites.chat.adapter.ChatAdapter
-import com.uzair.chatmodulewithfirebase.activites.selectUser.SelectUserActivity
+import com.uzair.chatmodulewithfirebase.activites.chat.callBacks.ChatSelectionCallBack
 import com.uzair.chatmodulewithfirebase.dataClasses.ChatMessageDataClass
-import com.uzair.chatmodulewithfirebase.dataClasses.InboxDataClass
+import com.uzair.chatmodulewithfirebase.dataClasses.GeneralInboxDataClass
+import com.uzair.chatmodulewithfirebase.dataClasses.UserInfoClass
 import com.uzair.chatmodulewithfirebase.dataClasses.UserStatusDataClass
 import com.uzair.chatmodulewithfirebase.databinding.ActivityChatBinding
 import java.util.*
-import kotlin.math.log
+import kotlin.collections.ArrayList
 
 
-class ChatActivity : BaseActivity() {
+class ChatActivity : BaseActivity(), ChatSelectionCallBack {
     private var isLoadData: Boolean = false
     lateinit var binding: ActivityChatBinding
     lateinit var firestoreRef: FirebaseFirestore
@@ -35,11 +40,14 @@ class ChatActivity : BaseActivity() {
     var mLastIndex = 0
     var mPrevKey: String? = ""
 
-
     val totalItemsToLoad = 10
     private var currentPage = 1
     private var selectedName = ""
     private var selectedId = ""
+    private var selectedImage = ""
+    private var chatKey: String? = null
+    lateinit var seenListener: ListenerRegistration
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,36 +55,35 @@ class ChatActivity : BaseActivity() {
 
         firestoreRef = Firebase.firestore
 
-        if (intent.getParcelableExtra<InboxDataClass>("inboxInfo") != null) {
-            val inboxInfo = intent.getParcelableExtra<InboxDataClass>("inboxInfo")
-            selectedName = inboxInfo!!.receiverName
-            selectedId = inboxInfo.receiverId
-        }
-        else {
-            selectedName = intent.getStringExtra("name")!!
-            selectedId = intent.getStringExtra("id")!!
-        }
+        selectedName = intent.getStringExtra("name")!!
+        selectedId = intent.getStringExtra("id")!!
+//        selectedImage = intent.getStringExtra("image")!!
 
+        chatKey = if (intent.getStringExtra("chatKey") != null) {
+            intent.getStringExtra("chatKey")
+        } else {
+            val userList = ArrayList<Int>()
+            userList.add(currentUserId.toInt())
+            userList.add(selectedId.toInt())
+            val sortedArray = userList.sorted()
+            "${sortedArray[0]}_${sortedArray[1]}"
+        }
         binding.selectedUserName.text = selectedName
         binding.btnSend.setOnClickListener {
             val msg = binding.edtMessage.text
-            sendMessage(msg.toString(), selectedName, selectedId)
+            sendMessage(msg.toString())
         }
 
+//        if (chatKey != null)
 
-        readMessages(selectedId)
         getUserStatus(selectedId)
 
+        seenMessage()
+        readMessages(chatKey!!)
 
-        seenMessage(selectedId)
         binding.chatRv.layoutManager = layoutManager
         layoutManager.reverseLayout = true
-        binding.chatRv.adapter = ChatAdapter(chatMessageArray, currentUserId)
-
-
-
-
-
+        binding.chatRv.adapter = ChatAdapter(chatMessageArray, currentUserId, this)
 
 
         binding.chatRv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -91,7 +98,8 @@ class ChatActivity : BaseActivity() {
                     ) {
                         val visibleItemCount = binding.chatRv.childCount
                         val totalItemCount = layoutManager.itemCount
-                        val firstVisibleItem = layoutManager.findFirstCompletelyVisibleItemPosition()
+                        val firstVisibleItem =
+                            layoutManager.findFirstCompletelyVisibleItemPosition()
 
                         if (isLoadData) {
                             if ((visibleItemCount + firstVisibleItem) >= totalItemCount) {
@@ -108,11 +116,11 @@ class ChatActivity : BaseActivity() {
 
     private fun getPaginatedMessages() {
 
-        binding.pbLoading.visibility=View.VISIBLE
-        val readMessageRef = firestoreRef.collection("GeneralChats")
-            .document(currentUserId).collection(selectedId)
-            .orderBy("timeInMilli", Query.Direction.DESCENDING)
-            .startAfter(chatMessageArray.last().timeInMilli)
+        binding.pbLoading.visibility = View.VISIBLE
+        val readMessageRef = firestoreRef.collection("Chats")
+            .document(chatKey!!).collection("Threads")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .startAfter(chatMessageArray.last().createdAt)
             .limit((totalItemsToLoad).toLong())
 
         readMessageRef.addSnapshotListener { value, error ->
@@ -122,77 +130,78 @@ class ChatActivity : BaseActivity() {
             }
 
             value!!.documents.forEach {
-
                 val message = it.toObject(ChatMessageDataClass::class.java)!!
-                val messageKey = message.timeInMilli
-                if (mPrevKey != messageKey) {
-                    chatMessageArray.add(message)
-                } else {
-                    mPrevKey = mLastKey
-                }
-                if (itemPos == 1) {
-                    mLastKey = messageKey
+                if (!message.deletedFor.contains(currentUserId)) {
+                    val messageKey = message.id
+                    if (mPrevKey != messageKey) {
+                        chatMessageArray.add(message)
+                    } else {
+                        mPrevKey = mLastKey
+                    }
+                    if (itemPos == 1) {
+                        mLastKey = messageKey
+                    }
+                    isLoadData = true
+                    binding.chatRv.adapter!!.notifyDataSetChanged()
+                    binding.pbLoading.visibility = View.GONE
                 }
             }
-
-            isLoadData = true
-            binding.chatRv.adapter!!.notifyDataSetChanged()
-            binding.pbLoading.visibility=View.GONE
         }
-
 
     }
 
     private fun getUserStatus(selectedId: String) {
         val userStatusRef = firestoreRef.collection("UserStatus").document(selectedId)
-
         userStatusRef.addSnapshotListener { value, error ->
             if (error != null) {
                 Toast.makeText(this, error.localizedMessage, Toast.LENGTH_SHORT).show()
                 return@addSnapshotListener
             }
-
             val userStatus = value!!.toObject(UserStatusDataClass::class.java)
-
-            if (userStatus!!.state == "offline") binding.userStatus.text =
-                "Last Seen:${userStatus.lastSeen}"
-            else if (userStatus.state == "Online") binding.userStatus.text = userStatus.state
-
-
+            if (userStatus != null) {
+                if (userStatus.state == "offline") binding.userStatus.text =
+                    "Last Seen:${userStatus.lastSeen}"
+                else if (userStatus.state == "Online") binding.userStatus.text = userStatus.state
+            }
         }
     }
 
-    private fun seenMessage(selectedId: String) {
+    private fun seenMessage() {
+        val currentUserList = listOf(currentUserId)
         val getReceiverSentMsgRef =
-            firestoreRef.collection("GeneralChats").document(selectedId)
-                .collection(currentUserId)
-                .whereEqualTo("status", "sent")
+            firestoreRef.collection("Chats").document(chatKey!!)
+                .collection("Threads")
+                .whereEqualTo("senderId", selectedId)
 
-        /*Getting Lists of message of other users which are not seen*/
-
-        getReceiverSentMsgRef.addSnapshotListener { value, error ->
+        seenListener = getReceiverSentMsgRef.addSnapshotListener { value, error ->
             if (error != null) {
                 Toast.makeText(this, error.localizedMessage, Toast.LENGTH_SHORT).show()
                 return@addSnapshotListener
             }
             if (value?.documents != null && value.documents.isNotEmpty()) {
-
                 value.documents.forEach {
-
-                    /*Updateing the documents with status seen*/
-                    if (it.data!!["receiverId"] == currentUserId)
-                        firestoreRef.collection("GeneralChats").document(selectedId)
-                            .collection(currentUserId).document(it.id)
-                            .update("status", "seen")
+                    val message = it.toObject(ChatMessageDataClass::class.java)!!
+                    if (!message.seenBy.contains(currentUserId)
+                        &&
+                        !message.deletedFor.contains(currentUserId)
+                    ) {
+                        firestoreRef.collection("Chats").document(chatKey!!)
+                            .collection("Threads").document(message.id)
+                            .update("seenBy", currentUserList).addOnSuccessListener {
+                                it
+                            }.addOnFailureListener { exception ->
+                                exception
+                            }
+                    }
                 }
             }
         }
     }
 
     private fun readMessages(selectedId: String) {
-        val readMessageRef = firestoreRef.collection("GeneralChats")
-            .document(currentUserId).collection(selectedId)
-            .orderBy("timeInMilli", Query.Direction.DESCENDING)
+        val readMessageRef = firestoreRef.collection("Chats")
+            .document(selectedId).collection("Threads")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit((currentPage * totalItemsToLoad).toLong())
 
         readMessageRef.addSnapshotListener { value, error ->
@@ -204,109 +213,128 @@ class ChatActivity : BaseActivity() {
                 chatMessageArray.clear()
                 value.documents.forEach {
                     val message = it.toObject(ChatMessageDataClass::class.java)!!
-                    itemPos++
-                    if (itemPos == 1) {
-                        val messageKey = message.timeInMilli
-                        mLastKey = messageKey
-                        mPrevKey = messageKey
+                    if (!message.deletedFor.contains(currentUserId)) {
+                        itemPos++
+                        if (itemPos == 1) {
+                            val messageKey = message.id
+                            mLastKey = messageKey
+                            mPrevKey = messageKey
+                        }
+                        chatMessageArray.add(message)
                     }
-                    chatMessageArray.add(message)
+                    isLoadData = true
+                    binding.chatRv.adapter!!.notifyDataSetChanged()
                 }
-                isLoadData = true
-                binding.chatRv.adapter!!.notifyDataSetChanged()
             }
         }
 
     }
 
-    private fun sendMessage(msg: String, selectedName: String?, selectedId: String?) {
+    private fun sendMessage(msg: String) {
 
-        val senderRef =
-            firestoreRef.collection("GeneralChats").document(currentUserId).collection(selectedId!!)
-                .document()
+        val chatRef = firestoreRef.collection("Chats").document(chatKey!!)
+        val msgRef = chatRef.collection("Threads").document()
+        val secondKey = msgRef.id
+        val currentDate = Date()
+        val messageObj = ChatMessageDataClass()
+        messageObj.message = msg
+        messageObj.senderId = currentUserId
+        messageObj.senderName = currentUserName
+        messageObj.id = secondKey
+        messageObj.createdAt = currentDate
 
-        val refKey = senderRef.id
-
-        val senderHashMap = HashMap<String, Any>()
-        senderHashMap["senderId"] = currentUserId
-        senderHashMap["senderName"] = currentUserName
-        senderHashMap["receiverName"] = selectedName!!
-        senderHashMap["receiverId"] = selectedId
-        senderHashMap["status"] = "sent"
-        senderHashMap["message"] = msg
-        senderHashMap["time"] = SelectUserActivity.currentTime()
-        senderHashMap["timeInMilli"] = System.currentTimeMillis().toString()
-
-        /*Sending Message*/
-
-        senderRef.set(senderHashMap)
-            .addOnSuccessListener {
-                Toast.makeText(this, "Message Sent", Toast.LENGTH_SHORT).show()
+        chatRef.collection("Threads").document(secondKey)
+            .set(messageObj).addOnSuccessListener {
+                Toast.makeText(this, "Messages Sent", Toast.LENGTH_LONG).show()
                 binding.edtMessage.setText("")
+                updateInbox(chatKey!!, chatRef, msg, currentDate)
+            }.addOnFailureListener {
+                Toast.makeText(this, "Thread Errror:$it", Toast.LENGTH_SHORT).show()
             }
-            .addOnFailureListener {
-                Toast.makeText(this, it.localizedMessage, Toast.LENGTH_LONG).show()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        seenListener.remove()
+    }
+
+
+    private fun updateInbox(
+        firstKey: String,
+        chatRef: DocumentReference,
+        msg: String,
+        currentDate: Date
+    ) {
+
+        val inboxDataClass = GeneralInboxDataClass()
+        inboxDataClass.users = arrayListOf(
+            UserInfoClass(selectedName, selectedId, ""),
+            UserInfoClass(currentUserName, currentUserId, "")
+        )
+
+        inboxDataClass.usersId = arrayListOf(currentUserId, selectedId)
+        inboxDataClass.lastMsg = null
+        inboxDataClass.id = firstKey
+        inboxDataClass.lastMsgTime = Date()
+        inboxDataClass.senderId = ""
+        inboxDataClass.senderName = ""
+        inboxDataClass.isGroupChat = false
+
+//        try {
+        chatRef.set(inboxDataClass).addOnSuccessListener {
+
+        }.addOnFailureListener {
+            Toast.makeText(this, it.toString(), Toast.LENGTH_LONG).show()
+        }
+//        }catch (e:Exception){
+//            e
+//        }
+    }
+
+    override fun onChatSelection(chatData: Any) {
+        if (chatData is ChatMessageDataClass) {
+            val dialog = Dialog(this)
+            dialog.setContentView(R.layout.delete_dialog_layout)
+            dialog.window!!.setLayout(
+                ConstraintLayout.LayoutParams.MATCH_PARENT,
+                ConstraintLayout.LayoutParams.WRAP_CONTENT
+            )
+            val btnDeleteForMe = dialog.findViewById<MaterialButton>(R.id.btnDeleteMe)
+            val btnDeleteForAll = dialog.findViewById<MaterialButton>(R.id.btnDeleteAll)
+            val btnCancel = dialog.findViewById<MaterialButton>(R.id.btnCancel)
+            if (chatData.senderId != currentUserId) {
+                btnDeleteForAll.visibility = View.GONE
+            }
+            btnDeleteForMe.setOnClickListener {
+                deleteMessageForMe(chatData)
+                dialog.dismiss()
+            }
+            btnCancel.setOnClickListener {
+                dialog.dismiss()
+            }
+            btnDeleteForAll.setOnClickListener {
+                deleteMessageForAll(chatData)
+                dialog.dismiss()
             }
 
+            dialog.show()
+        }
+    }
 
-        val receiverRef =
-            firestoreRef.collection("GeneralChats").document(selectedId)
-                .collection(currentUserId).document(refKey)
+    private fun deleteMessageForAll(chatData: ChatMessageDataClass) {
+        firestoreRef.collection("Chats")
+            .document(chatKey!!)
+            .collection("Threads")
+            .document(chatData.id).delete()
+    }
 
-        val receiverHashMap = HashMap<String, Any>()
-        receiverHashMap["senderId"] = currentUserId
-        receiverHashMap["senderName"] = currentUserName
-        receiverHashMap["receiverName"] = selectedName
-        receiverHashMap["receiverId"] = selectedId
-        receiverHashMap["message"] = msg
-        receiverHashMap["time"] = SelectUserActivity.currentTime()
-        receiverHashMap["timeInMilli"] = System.currentTimeMillis().toString()
-
-        receiverRef.set(receiverHashMap)
-
-
-
-
-        val inboxHashMap = HashMap<String, String?>()
-        inboxHashMap["last_message"] = msg
-        inboxHashMap["date"] = SelectUserActivity.currentTime()
-        inboxHashMap["timeInMilli"] = System.currentTimeMillis().toString()
-
-        /*Updating Inbox of sender*/
-
-        inboxHashMap["senderName"] = currentUserName
-        inboxHashMap["senderId"] = currentUserId
-        inboxHashMap["receiverName"] = selectedName
-        inboxHashMap["receiverId"] = selectedId
-
-        /*Update Sender Inbox*/
-//            .document("lastMessage")
-
-
-        /*1st way*/
-
-        val senderInboxRef = firestoreRef.collection("generalChatInbox").document(currentUserId)
-            .collection(currentUserId).document(selectedId)
-        senderInboxRef.set(inboxHashMap)
-            .addOnSuccessListener {}
-            .addOnFailureListener {}
-
-
-        /*Updating Inbox of receiver*/
-        inboxHashMap["senderName"] = selectedName
-        inboxHashMap["senderId"] = selectedId
-        inboxHashMap["receiverName"] = currentUserName
-        inboxHashMap["receiverId"] = currentUserId
-
-
-        /*Update receiver Inbox*/
-
-        val receiverInboxRef = firestoreRef.collection("generalChatInbox")
-            .document(selectedId).collection(selectedId).document(currentUserId)
-
-        receiverInboxRef.set(inboxHashMap)
-            .addOnSuccessListener {}
-            .addOnFailureListener { }
-
+    private fun deleteMessageForMe(chatData: ChatMessageDataClass) {
+        chatData.deletedFor.add(currentUserId)
+        val deleteForList = chatData.deletedFor
+        firestoreRef.collection("Chats")
+            .document(chatKey!!)
+            .collection("Threads")
+            .document(chatData.id)
+            .update("deletedFor", deleteForList)
     }
 }
